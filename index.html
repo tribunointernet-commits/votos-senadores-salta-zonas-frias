@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Votación - Ley de Zonas Frías</title>
+  <meta name="description" content="Gráfico interactivo del hemiciclo con resultados de la votación sobre la Ley de Zonas Frías y desglose de los senadores de Salta.">
+  
+  <style>
+    :root {
+      --color-corporate-light: #7FA0C4;
+      --color-corporate-dark: #122D4B;
+      --color-corporate-darker: #0B1C30;
+      --color-affirmative: #10B981;
+      --color-affirmative-glow: rgba(16, 185, 129, 0.45);
+      --color-negative: #EF4444;
+      --color-negative-glow: rgba(239, 68, 68, 0.45);
+      --color-abstention: #94A3B8;
+      --color-absent: #64748B;
+      --color-border: rgba(127, 160, 196, 0.25);
+      
+      --font-display: Arial, "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-sans: Arial, "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'Consolas', 'Courier New', Courier, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--color-corporate-darker);
+      color: #F8FAFC;
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      padding: 2rem 0 4rem;
+    }
+
+    h1, h2, h3, h4, .section-title, .hero-title, .summary-headline {
+      font-family: var(--font-display);
+      font-weight: 700;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Hero Section */
+    .hero-section {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-title {
+      font-size: 2.25rem;
+      letter-spacing: -0.01em;
+      color: #FFFFFF;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero-subtitle {
+      font-size: 0.95rem;
+      color: var(--color-corporate-light);
+      max-width: 650px;
+      margin: 0 auto 1.25rem;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #10B981;
+      padding: 0.35rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* Cards general */
+    .card-surface {
+      position: relative;
+      background: linear-gradient(135deg, rgba(18, 45, 75, 0.8) 0%, rgba(11, 28, 48, 0.95) 100%);
+      border: 1px solid var(--color-border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* SECTION 1: HEMICYCLE */
+    .section-hemicycle {
+      margin-bottom: 3.5rem;
+    }
+
+    .section-headline {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid rgba(127, 160, 196, 0.18);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-headline h2 {
+      font-size: 1.45rem;
+      color: #FFFFFF;
+    }
+
+    .section-headline p {
+      font-size: 0.8rem;
+      color: var(--color-corporate-light);
+    }
+
+    /* Contenedor del arco del hemiciclo */
+    .hemicycle-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    svg.hemicycle-svg {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 620 / 280;
+      overflow: visible;
+      display: block;
+    }
+
+    .seat-node {
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+      transform-origin: center;
+    }
+
+    .seat-node:hover {
+      transform: scale(1.4);
+      filter: brightness(1.35) drop-shadow(0 0 10px currentColor);
+    }
+
+    /* Caritas en bancas 18, 19, 20: Blanco y negro por defecto, Color en hover */
+    .seat-avatar {
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .seat-avatar image {
+      filter: grayscale(100%) brightness(0.9);
+      transition: filter 0.25s ease;
+    }
+
+    .seat-avatar:hover image,
+    .seat-avatar.highlighted image {
+      filter: grayscale(0%) contrast(1.1);
+    }
+
+    .seat-avatar circle.avatar-border {
+      stroke: #FFFFFF;
+      stroke-width: 1.8;
+      transition: stroke 0.25s ease, filter 0.25s ease;
+    }
+
+    .seat-avatar:hover circle.avatar-border,
+    .seat-avatar.highlighted circle.avatar-border {
+      stroke: #10B981;
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.9));
+    }
+
+    /* Bloque central de cómputo: Claramente separado abajo del hemiciclo sin superposición */
+    .center-summary {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      margin: 2.25rem auto 0;
+      clear: both;
+      width: 100%;
+      max-width: 520px;
+      background: rgba(11, 28, 48, 0.95);
+      border: 1px solid rgba(127, 160, 196, 0.35);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+
+    .summary-kicker {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--color-corporate-light);
+      font-weight: 700;
+    }
+
+    .summary-headline {
+      font-size: 1.45rem;
+      color: #FFFFFF;
+      font-weight: 700;
+      margin-top: 0.25rem;
+    }
+
+    .metrics-pills {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+      margin: 0.9rem 0;
+    }
+
+    .metric-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 0.45rem 0.25rem;
+      text-align: center;
+    }
+
+    .metric-pill.afirm {
+      border-color: rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .metric-pill.neg {
+      border-color: rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.08);
+    }
+
+    .metric-pill.abst {
+      border-color: rgba(148, 163, 184, 0.2);
+    }
+
+    .metric-pill.aus {
+      border-color: rgba(100, 116, 139, 0.2);
+    }
+
+    .metric-pill .count {
+      font-family: var(--font-mono);
+      font-size: 1.35rem;
+      font-weight: 700;
+      display: block;
+      line-height: 1.1;
+    }
+
+    .metric-pill.afirm .count { color: var(--color-affirmative); }
+    .metric-pill.neg .count { color: var(--color-negative); }
+    .metric-pill.abst .count { color: var(--color-abstention); }
+    .metric-pill.aus .count { color: var(--color-absent); }
+
+    .metric-pill .label {
+      font-size: 0.65rem;
+      color: #CBD5E1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.15rem;
+      display: block;
+    }
+
+    .threshold-container {
+      margin-top: 0.85rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(127, 160, 196, 0.15);
+    }
+
+    .threshold-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: #94A3B8;
+      margin-bottom: 0.4rem;
+    }
+
+    .threshold-bar-bg {
+      position: relative;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
+      overflow: visible;
+    }
+
+    .threshold-bar-fill {
+      height: 100%;
+      width: 52.7%; /* 38 de 72 */
+      background: linear-gradient(90deg, #059669, #10B981);
+      border-radius: 9999px;
+    }
+
+    .threshold-marker {
+      position: absolute;
+      top: -3px;
+      bottom: -3px;
+      width: 2px;
+      background: #FBBF24;
+      box-shadow: 0 0 6px #FBBF24;
+    }
+
+    /* SECTION 2: SENADORES DE SALTA */
+    .section-salta {
+      margin-top: 2rem;
+    }
+
+    .section-title {
+      font-size: 1.65rem;
+      color: #FFFFFF;
+      letter-spacing: -0.01em;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      border-bottom: 1px solid var(--color-border);
+      padding-bottom: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-meta {
+      font-size: 0.8rem;
+      color: #10B981;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+
+    .senators-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+
+    .senator-card {
+      background: linear-gradient(135deg, rgba(18, 45, 75, 0.8) 0%, rgba(11, 28, 48, 0.95) 100%);
+      border: 1px solid var(--color-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .senator-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+
+    .senator-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      border-color: rgba(16, 185, 129, 0.5);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 18px rgba(16, 185, 129, 0.2);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 1.15rem;
+    }
+
+    /* Foto circular con borde verde brillante */
+    .photo-container {
+      position: relative;
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: 3.5px solid #10B981;
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+      overflow: hidden;
+      flex-shrink: 0;
+      background: var(--color-corporate-dark);
+      transition: all 0.25s ease;
+    }
+
+    .senator-card:hover .photo-container {
+      border-color: #34D399;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.7);
+      transform: scale(1.05);
+    }
+
+    .senator-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .senator-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .senator-name {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-bottom: 0.2rem;
+      line-height: 1.25;
+    }
+
+    .senator-party {
+      font-size: 0.8rem;
+      color: var(--color-corporate-light);
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .vote-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+    }
+
+    .vote-indicator.afirmativo {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #10B981;
+    }
+
+    .card-footer {
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: #94A3B8;
+    }
+
+    /* Tooltip */
+    #tooltip {
+      position: absolute;
+      display: none;
+      background: rgba(11, 28, 48, 0.96);
+      border: 1px solid var(--color-corporate-light);
+      border-radius: 8px;
+      padding: 0.6rem 0.85rem;
+      font-size: 0.8rem;
+      color: #FFFFFF;
+      pointer-events: none;
+      z-index: 100;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      transform: translate(-50%, -110%);
+      white-space: nowrap;
+    }
+
+    #tooltip strong {
+      display: block;
+      font-size: 0.85rem;
+      color: #FFFFFF;
+    }
+
+    .legend-bar {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(127, 160, 196, 0.18);
+      font-size: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #CBD5E1;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    @media (max-width: 768px) {
+      .hero-title { font-size: 1.65rem; }
+      .card-surface { padding: 1.25rem 0.75rem; }
+      .center-summary { margin-top: 1.5rem; padding: 1rem; width: 100%; }
+      .senators-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="hero-section">
+      <h1 class="hero-title">Proyecto / Ley de Zonas Frías</h1>
+      <p class="hero-subtitle">
+        Régimen especial de compensación tarifaria de gas por redes y gas licuado de petróleo (GLP) para municipios y regiones con climas de baja temperatura.
+      </p>
+      <div class="badge-status">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        RESULTADO: APROBADO CON 38 VOTOS AFIRMATIVOS
+      </div>
+    </section>
+
+    <!-- SECCIÓN 1: EL HEMICICLO -->
+    <section id="hemiciclo" class="section-hemicycle">
+      <div class="card-surface">
+        <div class="section-headline">
+          <h2>Cámara de Senadores</h2>
+          <p>72 bancas distribuidas en arco de 180°</p>
+        </div>
+
+        <div class="hemicycle-wrapper">
+          <svg id="senateHemicycle" class="hemicycle-svg" viewBox="0 0 620 280" width="100%" height="auto" aria-label="Hemiciclo de 72 bancas">
+            <defs>
+              <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+              <clipPath id="clip-18"><circle cx="10" cy="10" r="10" /></clipPath>
+              <clipPath id="clip-19"><circle cx="10" cy="10" r="10" /></clipPath>
+              <clipPath id="clip-20"><circle cx="10" cy="10" r="10" /></clipPath>
+            </defs>
+            <g id="seatsGroup"></g>
+          </svg>
+        </div>
+
+        <!-- CÓMPUTO GENERAL DE BANCAS (Separado limpiamente para evitar cualquier superposición) -->
+        <div class="center-summary" id="totales">
+          <div class="summary-kicker">Cómputo General de Bancas</div>
+          <div class="summary-headline">46 Presentes / 72 Totales</div>
+
+          <div class="metrics-pills">
+            <div class="metric-pill afirm">
+              <span class="count">38</span>
+              <span class="label">Afirmativo</span>
+            </div>
+            <div class="metric-pill neg">
+              <span class="count">8</span>
+              <span class="label">Negativo</span>
+            </div>
+            <div class="metric-pill abst">
+              <span class="count">0</span>
+              <span class="label">Abstención</span>
+            </div>
+            <div class="metric-pill aus">
+              <span class="count">26</span>
+              <span class="label">Ausente</span>
+            </div>
+          </div>
+
+          <div class="threshold-container">
+            <div class="threshold-header">
+              <span>Umbral de Aprobación: <strong>24 votos</strong></span>
+              <span style="color: var(--color-affirmative); font-weight: 700;">Superado (+14)</span>
+            </div>
+            <div class="threshold-bar-bg">
+              <div class="threshold-bar-fill"></div>
+              <div class="threshold-marker" style="left: 33.3%;" title="Umbral necesario: 24"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend-bar">
+          <div class="legend-item">
+            <span class="legend-dot" style="background: var(--color-affirmative); box-shadow: 0 0 8px var(--color-affirmative-glow);"></span>
+            <span>Afirmativo (38)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background: var(--color-negative); box-shadow: 0 0 8px var(--color-negative-glow);"></span>
+            <span>Negativo (8)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background: var(--color-abstention);"></span>
+            <span>Abstención (0)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background: var(--color-absent);"></span>
+            <span>Ausente (26)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: DESGLOSE SALTEÑO -->
+    <section id="salta" class="section-salta">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Voto de los Senadores Salteños</h2>
+        </div>
+        <div class="section-meta">
+          3 representantes de la Provincia de Salta • Voto Afirmativo
+        </div>
+      </div>
+
+      <div class="senators-grid" id="saltaSenatorsGrid"></div>
+    </section>
+  </main>
+
+  <div id="tooltip"></div>
+
+  <script>
+    const saltaSenators = [
+      {
+        id: "guzman-coraita",
+        name: "Gonzalo Guzmán Coraita",
+        party: "LLA (La Libertad Avanza)",
+        vote: "Afirmativo",
+        voteClass: "afirmativo",
+        photo: "https://www.senado.gob.ar/bundles/senadosenadores/images/fsenaG/592.gif",
+        seatNumber: 18
+      },
+      {
+        id: "orozco",
+        name: "María Emilia Orozco",
+        party: "LLA (La Libertad Avanza)",
+        vote: "Afirmativo",
+        voteClass: "afirmativo",
+        photo: "https://www.senado.gob.ar/bundles/senadosenadores/images/fsenaG/591.gif",
+        seatNumber: 19
+      },
+      {
+        id: "royon",
+        name: "Flavia Gabriela Royón",
+        party: "Primero Los Salteños",
+        vote: "Afirmativo",
+        voteClass: "afirmativo",
+        photo: "https://www.senado.gob.ar/bundles/senadosenadores/images/fsenaG/593.gif",
+        seatNumber: 20
+      }
+    ];
+
+    const rowsConfig = [
+      { row: 1, count: 14, radius: 135 },
+      { row: 2, count: 17, radius: 172 },
+      { row: 3, count: 20, radius: 210 },
+      { row: 4, count: 21, radius: 248 }
+    ];
+
+    const voteAllocation = [
+      ...Array(38).fill('afirmativo'),
+      ...Array(8).fill('negativo'),
+      ...Array(26).fill('ausente')
+    ];
+
+    const seatsGroup = document.getElementById('seatsGroup');
+    const tooltip = document.getElementById('tooltip');
+    const senatorsGrid = document.getElementById('saltaSenatorsGrid');
+
+    const cx = 310;
+    const cy = 260;
+    let seatId = 1;
+    const generatedSeats = [];
+
+    rowsConfig.forEach(row => {
+      const startAngle = Math.PI - 0.08;
+      const endAngle = 0.08;
+      const step = (startAngle - endAngle) / (row.count - 1);
+
+      for (let i = 0; i < row.count; i++) {
+        const angle = startAngle - (i * step);
+        const x = cx + row.radius * Math.cos(angle);
+        const y = cy - row.radius * Math.sin(angle);
+        const currentSeatId = seatId++;
+        const vote = voteAllocation[currentSeatId - 1];
+
+        const saltaSen = saltaSenators.find(s => s.seatNumber === currentSeatId);
+
+        let color = '#10B981';
+        if (vote === 'negativo') color = '#EF4444';
+        if (vote === 'ausente') color = '#64748B';
+
+        let elem;
+
+        if (saltaSen) {
+          // Grupo SVG para carita de senador (B/N por defecto, Color en hover)
+          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          g.setAttribute('class', 'seat-avatar');
+          g.setAttribute('transform', 'translate(' + (x - 10).toFixed(2) + ', ' + (y - 10).toFixed(2) + ')');
+
+          const imageG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          imageG.setAttribute('clip-path', 'url(#clip-' + saltaSen.seatNumber + ')');
+
+          const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+          img.setAttribute('href', saltaSen.photo);
+          img.setAttribute('x', '0');
+          img.setAttribute('y', '0');
+          img.setAttribute('width', '20');
+          img.setAttribute('height', '20');
+          img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+
+          imageG.appendChild(img);
+          g.appendChild(imageG);
+
+          const borderCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          borderCircle.setAttribute('cx', '10');
+          borderCircle.setAttribute('cy', '10');
+          borderCircle.setAttribute('r', '10');
+          borderCircle.setAttribute('fill', 'none');
+          borderCircle.setAttribute('class', 'avatar-border');
+
+          g.appendChild(borderCircle);
+          elem = g;
+        } else {
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', x.toFixed(2));
+          circle.setAttribute('cy', y.toFixed(2));
+          circle.setAttribute('r', '6');
+          circle.setAttribute('fill', color);
+          circle.setAttribute('class', 'seat-node');
+          elem = circle;
+        }
+
+        elem.setAttribute('data-seat-id', currentSeatId);
+        elem.setAttribute('data-vote', vote);
+        elem.setAttribute('data-name', saltaSen ? saltaSen.name : ('Banca #' + currentSeatId));
+        elem.setAttribute('data-party', saltaSen ? saltaSen.party : (vote === 'afirmativo' ? 'Afirmativo' : (vote === 'negativo' ? 'Negativo' : 'Ausente')));
+
+        elem.addEventListener('mouseenter', (e) => {
+          tooltip.style.display = 'block';
+          tooltip.innerHTML = `
+            <strong>${elem.getAttribute('data-name')}</strong>
+            <span style="color: var(--color-corporate-light);">${elem.getAttribute('data-party')}</span>
+            <div style="margin-top: 4px; color: ${color}; font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">
+              Voto: ${vote.toUpperCase()}
+            </div>
+          `;
+          updateTooltipPosition(e);
+        });
+
+        elem.addEventListener('mousemove', (e) => {
+          updateTooltipPosition(e);
+        });
+
+        elem.addEventListener('mouseleave', () => {
+          tooltip.style.display = 'none';
+        });
+
+        if (saltaSen) {
+          elem.addEventListener('click', () => {
+            const card = document.getElementById('card-' + saltaSen.id);
+            if (card) {
+              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              card.style.transform = 'translateY(-8px) scale(1.04)';
+              card.style.borderColor = '#10B981';
+              setTimeout(() => {
+                card.style.transform = '';
+              }, 1200);
+            }
+          });
+        }
+
+        seatsGroup.appendChild(elem);
+        generatedSeats.push({ id: currentSeatId, element: elem, saltaSen });
+      }
+    });
+
+    function updateTooltipPosition(e) {
+      tooltip.style.left = (e.pageX) + 'px';
+      tooltip.style.top = (e.pageY - 15) + 'px';
+    }
+
+    saltaSenators.forEach(senator => {
+      const card = document.createElement('article');
+      card.className = 'senator-card';
+      card.id = 'card-' + senator.id;
+
+      card.innerHTML = `
+        <div class="card-top">
+          <div class="photo-container">
+            <img 
+              src="${senator.photo}" 
+              alt="${senator.name}" 
+              class="senator-photo" 
+              referrerpolicy="no-referrer"
+              onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'80\\' height=\\'80\\' viewBox=\\'0 0 80 80\\'><rect width=\\'80\\' height=\\'80\\' fill=\\'%23122D4B\\'/><circle cx=\\'40\\' cy=\\'32\\' r=\\'16\\' fill=\\'%237FA0C4\\'/><path d=\\'M20,68 C20,52 30,46 40,46 C50,46 60,52 60,68\\' fill=\\'%237FA0C4\\'/></svg>';"
+            />
+          </div>
+          <div class="senator-info">
+            <h3 class="senator-name">${senator.name}</h3>
+            <div class="senator-party">${senator.party}</div>
+            <div class="vote-indicator ${senator.voteClass}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Voto ${senator.vote}
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span>Provincia de Salta</span>
+          <span style="font-family: var(--font-mono); font-weight: 600;">Banca #${senator.seatNumber}</span>
+        </div>
+      `;
+
+      card.addEventListener('mouseenter', () => {
+        const match = generatedSeats.find(s => s.id === senator.seatNumber);
+        if (match && match.element) {
+          match.element.classList.add('highlighted');
+        }
+      });
+
+      card.addEventListener('mouseleave', () => {
+        const match = generatedSeats.find(s => s.id === senator.seatNumber);
+        if (match && match.element) {
+          match.element.classList.remove('highlighted');
+        }
+      });
+
+      senatorsGrid.appendChild(card);
+    });
+  </script>
+
+<script>
+function enviarAlturaIframe() {
+  const altura = document.documentElement.scrollHeight;
+  window.parent.postMessage({
+    tipo: "alturaIframe",
+    altura: altura
+  }, "*");
+}
+
+window.addEventListener("load", enviarAlturaIframe);
+window.addEventListener("resize", enviarAlturaIframe);
+
+setTimeout(enviarAlturaIframe, 1000);
+setTimeout(enviarAlturaIframe, 2500);
+</script>
+
+</body>
+</html>
